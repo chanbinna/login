@@ -11,10 +11,9 @@ Follow these steps to set up and run the login system:
 
 ### 2. Configure Backend Environment
 - Navigate to the `/backend` directory.
-- Create a `.env` file and add your MongoDB connection string and a JWT secret as follows:
+- Go to a `.env` file and add your MongoDB connection string as follows:
   ```env
   MONGO_URI=your_mongodb_connection_url
-  JWT_SECRET=your_secret_key
   ```
 
 ### 3. Install Frontend Dependencies
