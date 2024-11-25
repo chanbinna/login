@@ -1,18 +1,34 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import AuthWrapper from '../../components/authWrapper'; // Adjust the path
-import styles from './Dashboard.module.css'; // Dashboard-specific styles
+import AuthWrapper from '../../components/authWrapper';
+import styles from './Dashboard.module.css';
 
 const Dashboard = () => {
+    const [username, setUsername] = useState('');
     const router = useRouter();
 
     const handleLogout = () => {
-        // Remove token and redirect to login
         localStorage.removeItem('token');
+        localStorage.removeItem('username');
         router.push('/login');
     };
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            router.push('/login');
+            return;
+        }
+
+        const storedUsername = localStorage.getItem('username');
+        if (storedUsername) {
+            setUsername(storedUsername);
+        } else {
+            router.push('/login'); // Redirect if username is missing
+        }
+    }, [router]);
 
     return (
         <AuthWrapper>
@@ -29,7 +45,9 @@ const Dashboard = () => {
                     </ul>
                 </aside>
                 <main className={styles.mainContent}>
-                    <h1 className={styles.mainHeading}>Dashboard</h1>
+                    <h1 className={styles.mainHeading}>
+                        Hi {username} 👋🏻
+                    </h1>
                     <p className={styles.welcomeMessage}>
                         Welcome to your personalized dashboard. Manage your account, view insights, and adjust your preferences here.
                     </p>

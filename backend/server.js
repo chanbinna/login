@@ -88,21 +88,12 @@ const resolvers = {
                 throw new Error('User not found');
             }
 
-            console.log('Stored password hash:', user.password);
-            console.log('Provided password:', password);
-
-            // Trim the provided password
-            const trimmedPassword = password.trim();
-            console.log('Trimmed provided password:', trimmedPassword);
-
-            const valid = await bcrypt.compare(trimmedPassword, user.password);
-            console.log('Password valid:', valid);
-
+            const valid = await bcrypt.compare(password.trim(), user.password);
             if (!valid) {
                 throw new Error('Invalid password');
             }
 
-            const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1h' });
+            const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
             return { token };
         },
         register: async (_, { username, password }) => {
@@ -110,25 +101,16 @@ const resolvers = {
                 throw new Error('Username and password are required');
             }
 
-            // Check if user already exists
             const existingUser = await User.findOne({ username });
             if (existingUser) {
                 throw new Error('Username already exists');
             }
 
-            // Hash the password explicitly
-            const trimmedPassword = password.trim();
-            const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
-            console.log('Original password:', password);
-            console.log('Trimmed password:', trimmedPassword);
-            console.log('Hashed password:', hashedPassword);
-
-            // Save user with hashed password
+            const hashedPassword = await bcrypt.hash(password.trim(), 10);
             const user = new User({ username, password: hashedPassword });
             await user.save();
-            console.log('User saved to database:', user);
 
-            const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1h' });
+            const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
             return { token };
         },
     },

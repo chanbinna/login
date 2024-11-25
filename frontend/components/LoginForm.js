@@ -25,10 +25,16 @@ const LoginForm = () => {
         try {
             const result = await login({ variables: { username, password } });
             const token = result.data.login.token;
-            console.log('Login successful:', token);
 
-            // Save token to localStorage
+            // Decode the token to extract username
+            const decodedToken = JSON.parse(atob(token.split('.')[1])); // Decode the JWT payload
+            const fetchedUsername = decodedToken.username;
+
+            console.log('Login successful:', token, fetchedUsername);
+
+            // Save token and username to localStorage
             localStorage.setItem('token', token);
+            localStorage.setItem('username', fetchedUsername);
 
             // Redirect to /dashboard
             router.push('/dashboard');
