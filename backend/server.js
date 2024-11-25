@@ -1,74 +1,145 @@
 import { ApolloServer, gql } from "apollo-server";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+dotenv.config();
 
-const users = [
-    {
-        id: 1,
-        firstName: "John",
-        lastName: "Doe"
-    },
-    {
-        id: 2,
-        firstName: "Jane",
-        lastName: "Doe"
-    },
-];
+const JWT_SECRET = process.env.JWT_SECRET;
+const MONGO_URI = process.env.MONGO_URI;
 
+if (!MONGO_URI) {
+    throw new Error('Please define the MONGO_URI environment variable');
+}
+
+// Connect to MongoDB
+mongoose.connect(MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+});
+
+mongoose.connection.on('connected', () => {
+    console.log('Connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+    console.error(`Error connecting to MongoDB: ${err.message}`);
+});
+
+// GraphQL Type Definitions
 const typeDefs = gql`
     type User {
-        id: ID! # required field
-        firstName: String! # required field
-        lastName: String! # required field
-        fullName: String! # custom field
+        id: ID!
+        username: String!
+        password: String! # Hashed password
     }
 
-    type Query {    
+    type Token {
+        token: String!
+    }
+
+    type Query {
         allUsers: [User!]!
     }
 
     type Mutation {
-        createUser(firstName: String!, lastName: String!): User!
-        deleteUser(id: ID!): User
+        login(username: String!, password: String!): Token!
+        register(username: String!, password: String!): Token!
     }
 `;
 
+// Mongoose Schema
+const userSchema = new mongoose.Schema({
+    username: {
+        type: String,
+        required: true,
+        unique: true,
+    },
+    password: {
+        type: String,
+        required: true,
+    },
+});
+
+// Middleware to prevent double hashing
+userSchema.pre('save', async function (next) {
+    if (this.isModified('password') || this.isNew) {
+        if (!this.password.startsWith('$2a$')) { // Only hash if not already hashed
+            this.password = await bcrypt.hash(this.password, 10);
+        }
+    }
+    next();
+});
+
+const User = mongoose.model('User', userSchema);
+
+// GraphQL Resolvers
 const resolvers = {
     Query: {
-        allUsers() {
+        allUsers: async () => {
+            const users = await User.find();
             return users;
         },
     },
-
     Mutation: {
-        createUser(_, { firstName, lastName }) {
-            const newId = users.length > 0 ? Math.max(...users.map(user => user.id)) + 1 : 1; // Calculate new ID
-            const newUser = {
-                id: newId,
-                firstName,
-                lastName
-            };
-            users.push(newUser);
-            return newUser;
-        },
-
-        deleteUser(_, { id }) {
-            const userIndex = users.findIndex((user) => user.id === parseInt(id, 10));
-            if (userIndex === -1) {
-                throw new Error(`User with id ${id} not found`);
+        login: async (_, { username, password }) => {
+            const user = await User.findOne({ username });
+            if (!user) {
+                throw new Error('User not found');
             }
-            const [deletedUser] = users.splice(userIndex, 1); // Remove user from the array
-            return deletedUser; // Return the deleted user
-        },
-    },
 
-    User: {
-        fullName({ firstName, lastName }) {
-            return `${firstName} ${lastName}`;
+            console.log('Stored password hash:', user.password);
+            console.log('Provided password:', password);
+
+            // Trim the provided password
+            const trimmedPassword = password.trim();
+            console.log('Trimmed provided password:', trimmedPassword);
+
+            const valid = await bcrypt.compare(trimmedPassword, user.password);
+            console.log('Password valid:', valid);
+
+            if (!valid) {
+                throw new Error('Invalid password');
+            }
+
+            const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1h' });
+            return { token };
+        },
+        register: async (_, { username, password }) => {
+            if (!username || !password) {
+                throw new Error('Username and password are required');
+            }
+
+            // Check if user already exists
+            const existingUser = await User.findOne({ username });
+            if (existingUser) {
+                throw new Error('Username already exists');
+            }
+
+            // Hash the password explicitly
+            const trimmedPassword = password.trim();
+            const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
+            console.log('Original password:', password);
+            console.log('Trimmed password:', trimmedPassword);
+            console.log('Hashed password:', hashedPassword);
+
+            // Save user with hashed password
+            const user = new User({ username, password: hashedPassword });
+            await user.save();
+            console.log('User saved to database:', user);
+
+            const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1h' });
+            return { token };
         },
     },
 };
 
-const server = new ApolloServer({ typeDefs, resolvers });
+// Start Apollo Server
+const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+});
 
 server.listen().then(({ url }) => {
-    console.log(`Running on ${url}`);
+    console.log(`🚀 Server ready at ${url}`);
 });
